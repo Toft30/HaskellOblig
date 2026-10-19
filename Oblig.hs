@@ -1,0 +1,2 @@
+--INF Obligatorisk oppgåve, H-2026
+--Namn: Simon Toft og William Waly
