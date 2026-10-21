@@ -26,5 +26,5 @@ tokenise (x:xs)
     |x == '-' = "-" : tokenise xs
     |isLower x = let (var, rest) = span isLower (x:xs) in var : tokenise rest
     |otherwise = [x] : tokenise xs
-    
+
 
