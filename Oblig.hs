@@ -10,7 +10,7 @@ data Ast --her definere ej den rekursive datatypen Ast
         | Val Int --bladnode som representere tall
         | Add Ast Ast
         | Sub Ast Ast
-        | Mul Ast Ast
+        | Mult Ast Ast
         | Div Ast Ast
         | App Ast Ast
         | Lambda String Ast
@@ -28,33 +28,27 @@ tokenise (x:xs)
     |isAlpha x = let (var, rest) = span isAlpha (x:xs) in var : tokenise rest
     |otherwise = [x] : tokenise xs
     
-newtype Parser a = Parse (String -> [(a, String)])
+newtype Parser a = Parse ([String] -> [(a, [String])])
+
+
+parseHelper :: Parser a -> [String] -> [(a, [String])]
+parseHelper (Parse p) inp = p inp
+item :: Parser String
+item = Parse (\inp -> case inp of
+                    []     -> []
+                    (x:xs) -> [(x, xs)])
+sat :: (String -> Bool) -> Parser String
+sat p = do x <- item
+           if p x then return x else empty
 
 natural :: Parser Int
-natural = Parse (\inp ->
-    let inp' = dropWhile isSpace inp --hoppe over myllarom
-        (num, rest) = span isDigit inp'
-    in if null num
-        then []
-        else [(read num, dropWhile isSpace rest)])
-
-parseHelper :: Parser a -> String -> [(a, String)]
-parseHelper (Parse p) inp = p inp
-
-symbol :: String -> Parser String
-symbol xs = Parse (\inp ->
-  let inp' = dropWhile isSpace inp
-  in if take (length xs) inp' == xs
-       then [(xs, dropWhile isSpace (drop (length xs) inp'))]
-       else [])
+natural = read <$> sat (all isDigit)
 
 identifier :: Parser String
-identifier = Parse (\inp ->
-  let inp' = dropWhile isSpace inp
-      (var, rest) = span isAlpha inp'
-  in if null var
-       then []
-       else [(var, dropWhile isSpace rest)])
+identifier = sat (all isLower)
+
+symbol :: String -> Parser String
+symbol s = sat (== s)
 
 instance Functor Parser where
     fmap f p = Parse (\inp -> [(f v, out) | (v, out) <- parseHelper p inp])
@@ -74,10 +68,10 @@ instance Alternative Parser where
                                r  -> r)
 
 parse :: String -> Ast
-parse str = case parseHelper parseExpr str of
-  [(tree, "")] -> tree
-  [(_, rest)]  -> error ("Parseren stoppa før slutt, ulese: " ++ rest)
-  []           -> error "Syntaksfeil: Kunne ikkje parse uttrykket"
+parse str = case parseHelper parseExpr (tokenise str) of
+    [(tree, [])]   -> tree
+    [(_, rest)]    -> error ("Unused input: " ++ unwords rest)
+    []             -> error "Ditte går nok ikkje"
 
 parseExpr :: Parser Ast
 parseExpr =
@@ -89,14 +83,14 @@ parseExpr =
             symbol "-"
             e2 <- parseExpr
             return (Sub e1 e2))
-    <|> parseExpr1
+    <|> return parseExpr1
 
 parseExpr1 :: Parser Ast
 parseExpr1 = 
         (do v <- parseValue
             symbol "*"
             e1 <- parseExpr1
-            return (Mul v e1))
+            return (Mult v e1))
     <|> (do v <- parseValue
             symbol "/"
             e1 <- parseExpr1
@@ -104,23 +98,22 @@ parseExpr1 =
     <|> parseValue
 
 parseValue :: Parser Ast
-parseValue = 
-    (do n <- natural
-        return (Val n))
-    <|> (do symbol "|"
-            x <- identifier
-            symbol "->"
-            e <- parseExpr
-            return (Lambda x e))
-    <|> (do symbol "["
-            v1 <- parseValue
-            v2 <- parseValue
-            symbol "]"
-            return (App v1 v2))
-    <|> (do symbol "("
-            e <- parseExpr
-            symbol ")"
-            return e)
+parseValue = (Val <$> natural)
+         <|> (Var <$> identifier)
+         <|> (do symbol "|"
+                 x <- identifier
+                 symbol "->"
+                 e <- parseExpr
+                 return (Lambda x e))
+         <|> (do symbol "["
+                 v1 <- parseValue
+                 v2 <- parseValue
+                 symbol "]"
+                 return (App v1 v2))
+         <|> (do symbol "("
+                 e <- parseExpr
+                 symbol ")"
+                 return e)
 
 
 
