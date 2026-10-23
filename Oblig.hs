@@ -63,7 +63,7 @@ parseValue ("[" : rest) =
         (v2, rest2) = parseValue rest1
     in case rest2 of 
         ("]" : restFinal) -> (App v1 v2, restFinal)
-        -                 -> error "mangla ein ']' til slutt"
+        _ -> error "mangla ein ']' til slutt"
 
 data Type
     = NumT
