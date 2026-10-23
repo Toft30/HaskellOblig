@@ -25,95 +25,56 @@ tokenise (x:xs)
     |x == '+' = "+" : tokenise xs
     |x == '-' && head xs == '>' = "->" : tokenise (tail xs)
     |x == '-' = "-" : tokenise xs
-    |isAlpha x = let (var, rest) = span isAlpha (x:xs) in var : tokenise rest
+    |isLower x = let (var, rest) = span isLower (x:xs) in var : tokenise rest
     |otherwise = [x] : tokenise xs
     
-newtype Parser a = Parse ([String] -> [(a, [String])])
-
-
-parseHelper :: Parser a -> [String] -> [(a, [String])]
-parseHelper (Parse p) inp = p inp
-item :: Parser String
-item = Parse (\inp -> case inp of
-                    []     -> []
-                    (x:xs) -> [(x, xs)])
-sat :: (String -> Bool) -> Parser String
-sat p = do x <- item
-           if p x then return x else empty
-
-natural :: Parser Int
-natural = read <$> sat (all isDigit)
-
-identifier :: Parser String
-identifier = sat (all isLower)
-
-symbol :: String -> Parser String
-symbol s = sat (== s)
-
-instance Functor Parser where
-    fmap f p = Parse (\inp -> [(f v, out) | (v, out) <- parseHelper p inp])
-
-instance Applicative Parser where
-    pure v = Parse (\inp -> [(v, inp)])
-    pf <*> px = Parse (\inp -> [(f v, out2) | (f, out1) <- parseHelper pf inp,
-                                             (v, out2) <- parseHelper px out1])
-
-instance Monad Parser where
-    p >>= f = Parse (\inp -> concat [parseHelper (f v) out | (v, out) <- parseHelper p inp])
-
-instance Alternative Parser where
-    empty = Parse (\_ -> [])
-    p <|> q = Parse (\inp -> case parseHelper p inp of
-                               [] -> parseHelper q inp
-                               r  -> r)
+--bruke parse fra veke 8
+fyrsteElement :: [String] -> String -> Bool
+fyrsteElement [] _ = False
+fyrsteElement (x:xs) y = x == y
 
 parse :: String -> Ast
-parse str = case parseHelper parseExpr (tokenise str) of
-    [(tree, [])]   -> tree
-    [(_, rest)]    -> error ("Unused input: " ++ unwords rest)
-    []             -> error "Ditte går nok ikkje"
+parse s = case parseExpr (tokenise s) of
+    (tree, []) -> tree
+    (_, rest) -> error "ka i alle dage, uventa slutt på input"
 
-parseExpr :: Parser Ast
-parseExpr =
-        (do e1 <- parseExpr1
-            symbol "+"
-            e2 <- parseExpr
-            return (Add e1 e2))
-    <|> (do e1 <- parseExpr1
-            symbol "-"
-            e2 <- parseExpr
-            return (Sub e1 e2))
-    <|> return parseExpr1
+parseExpr :: [String] -> (Ast, [String])
+parseExpr tokens | fyrsteElement rest "+" = (Add tree tree2, rest2)
+                 | fyrsteElement rest "-" = (Sub tree tree2, rest2)
+                 | otherwise = (tree, rest)
+    where
+        (tree, rest) = parseExpr1 tokens
+        (tree2, rest2) = parseExpr (tail rest)
 
-parseExpr1 :: Parser Ast
-parseExpr1 = 
-        (do v <- parseValue
-            symbol "*"
-            e1 <- parseExpr1
-            return (Mult v e1))
-    <|> (do v <- parseValue
-            symbol "/"
-            e1 <- parseExpr1
-            return (Div v e1))
-    <|> parseValue
+parseExpr1 :: [String] -> (Ast, [String])
+parseExpr1 tokens | fyrsteElement rest "*" = (Mult tree tree2, rest2)
+                  | fyrsteElement rest "/" = (Div tree tree2, rest2)
+                  | otherwise = (tree, rest)
+    where
+        (tree, rest) = parseValue tokens
+        (tree2, rest2) = parseExpr1 (tail rest)
 
-parseValue :: Parser Ast
-parseValue = (Val <$> natural)
-         <|> (Var <$> identifier)
-         <|> (do symbol "|"
-                 x <- identifier
-                 symbol "->"
-                 e <- parseExpr
-                 return (Lambda x e))
-         <|> (do symbol "["
-                 v1 <- parseValue
-                 v2 <- parseValue
-                 symbol "]"
-                 return (App v1 v2))
-         <|> (do symbol "("
-                 e <- parseExpr
-                 symbol ")"
-                 return e)
+parseValue :: [String] -> (Ast, [String])
+parseValue ("|" : var : "->" : rest) = 
+    let (bodyTree, restBody) = parseExpr rest
+    in (Lambda var bodyTree, restBody)
+parseValue ("[" : rest) = 
+    let (v1, rest1) = parseValue rest
+        (v2, rest2) = parseValue rest1
+    in case rest2 of 
+        ("]" : restFinal) -> (App v1 v2, restFinal)
+        -                 -> error "mangla ein ']' til slutt"
+
+data Type
+    = NumT
+    | Fun Type Type        --funksjonstype
+    | TVar String          --typevariabel
+    deriving Eq
+
+--del 3
+type Context = [(Ast, Type)]
+
+
 
 
 
