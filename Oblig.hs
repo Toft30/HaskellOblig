@@ -65,6 +65,9 @@ parseValue ("[" : rest) =
         ("]" : restFinal) -> (App v1 v2, restFinal)
         _ -> error "mangla ein ']' til slutt"
 
+typeVars :: [String]
+typeVars = ["t" ++ show x| x <- [1..]]
+
 data Type
     = NumT
     | Fun Type Type        --funksjonstype
@@ -73,9 +76,20 @@ data Type
 
 --del 3
 type Context = [(Ast, Type)]
+type Eqn = (Type, Type)
 
+initialContext :: Context
+initialContext = 
+    [(Var "+", Fun NumT (Fun 
+    NumT NumT))
+    , (Var "-", Fun NumT (Fun 
+    NumT NumT))
+    , (Var "*", Fun NumT (Fun 
+    NumT NumT))
+    , (Var "/", Fun NumT (Fun 
+    NumT NumT))]
 
-
-
-
+generateEqns :: Context -> Ast -> String -> [String] -> ([Eqn], [String])
+generateEqns ctx (Val _) varNamn rest = ([TVar varNamn, NumT], rest) 
+generateEqns ctx (Var x) varNamn rest = ([TVar varNamn, ])
 
