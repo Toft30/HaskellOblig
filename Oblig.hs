@@ -65,18 +65,43 @@ parseValue ("[" : rest) =
         ("]" : restFinal) -> (App v1 v2, restFinal)
         _ -> error "mangla ein ']' til slutt"
 
+--Del 2
+--Uendeleg liste med typevariabelnamn: "t1", "t2", "t3", ...
 typeVars :: [String]
 typeVars = ["t" ++ show x| x <- [1..]]
 
+--2.2 Dei moglege typeuttrykka: NumT, funksjonstype og typevariabel
 data Type
     = NumT
     | Fun Type Type        --funksjonstype
     | TVar String          --typevariabel
     deriving Eq
 
+--Show kan skrivast eksplisitt for å få pilar og parentesar, t.d. (NumT->t1)->t1
+instance Show Type where
+    show NumT = "NumT"
+    show (TVar name) = name
+    show (Fun a@(Fun _ _) b) = "(" ++ show a ++ ")->" ++ show b
+    show (Fun a b) = show a ++ "->" ++ show b
+
+--2.3 Forekjem typevariabelen med dette namnet i typeuttrykket?
+occursIn :: String -> Type -> Bool
+occursIn _ NumT = False
+occursIn name (TVar other) = name == other
+occursIn name (Fun a b) = occursIn name a || occursIn name b
+
+type Eqn = (Type, Type)
+
+unify :: [Eqn] -> Type -> Type
+unify [] res = res
+unify ((t0, t1) : eqns) res
+    | t0 == t1 = unify eqns res
+unify ((TVar x, t2) : eqns) res
+    | occursIn x t2 = --error? 
+    |otherwise = --på ett eller anna vis unify 
+
 --del 3
 type Context = [(Ast, Type)]
-type Eqn = (Type, Type)
 
 initialContext :: Context
 initialContext = 
@@ -90,6 +115,6 @@ initialContext =
     NumT NumT))]
 
 generateEqns :: Context -> Ast -> String -> [String] -> ([Eqn], [String])
-generateEqns ctx (Val _) varNamn rest = ([TVar varNamn, NumT], rest) 
-generateEqns ctx (Var x) varNamn rest = ([TVar varNamn, ])
+generateEqns ctx (Val _) varNamn rest = ([(TVar varNamn, NumT)], rest) 
+generateEqns ctx (Var x) varNamn rest = ([(TVar varNamn, )])
 
