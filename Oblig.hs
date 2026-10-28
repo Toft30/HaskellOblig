@@ -92,13 +92,22 @@ occursIn name (Fun a b) = occursIn name a || occursIn name b
 
 type Eqn = (Type, Type)
 
+--Byt ut typevariabelen med dette namnet med ein ny type, overalt i typeuttrykket
+substitute :: String -> Type -> Type -> Type
+substitute _ _ NumT = NumT
+substitute name new (TVar other) = if name == other then new else (TVar other) 
+substitute name new (Fun a b) = Fun (substitute name new a) (substitute name new b)
+
 unify :: [Eqn] -> Type -> Type
 unify [] res = res
-unify ((t0, t1) : eqns) res
-    | t0 == t1 = unify eqns res
-unify ((TVar x, t2) : eqns) res
-    | occursIn x t2 = --error? 
-    |otherwise = --på ett eller anna vis unify 
+unify ((a, b) : eqns) res
+    | a == b = unify eqns res
+unify ((TVar x, t) : eqns) res
+    | occursIn x t = error "Occurs check feil: Uendelig type"
+    |otherwise = unify (map (\(t1, t2) -> (substitute x t t1, substitute x t t2)) eqns) (substitute x t res)
+unify ((t, TVar x) : eqns) res = unify ((TVar x, t) : eqns) res
+unify ((Fun a1 b1, Fun a2 b2) : eqns) res = unify ((a1, a2) : (b1, b2) : eqns) res
+unify _ _ = error "Uforenlige typer: Kan ikke unifsere ulike typekonstruktører"
 
 --del 3
 type Context = [(Ast, Type)]
@@ -117,4 +126,3 @@ initialContext =
 generateEqns :: Context -> Ast -> String -> [String] -> ([Eqn], [String])
 generateEqns ctx (Val _) varNamn rest = ([(TVar varNamn, NumT)], rest) 
 generateEqns ctx (Var x) varNamn rest = ([(TVar varNamn, )])
-
