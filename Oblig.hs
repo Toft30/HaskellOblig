@@ -63,7 +63,17 @@ parseValue ("[" : rest) =
         (v2, rest2) = parseValue rest1
     in case rest2 of 
         ("]" : restFinal) -> (App v1 v2, restFinal)
-        _ -> error "mangla ein ']' til slutt"
+        _ -> error "mangla ein ']' til slutt" 
+
+parseValue ("(" : rest) =
+    let (a, rest1) = parseExpr rest
+    in case rest1 of 
+        (")" : restFinal) -> (a, restFinal)
+        _ -> error "mangla en ')' til slutt"
+
+parseValue (tok : rest) 
+    |all isDigit tok = (Val(read tok), rest)
+    |all isLower tok = (Var tok, rest)
 
 --Del 2
 --Uendeleg liste med typevariabelnamn: "t1", "t2", "t3", ...
