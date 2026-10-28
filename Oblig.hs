@@ -122,17 +122,52 @@ unify _ _ = error "Uforenlige typer: Kan ikke unifsere ulike typekonstruktører"
 --del 3
 type Context = [(Ast, Type)]
 
-initialContext :: Context
-initialContext = 
-    [(Var "+", Fun NumT (Fun 
-    NumT NumT))
-    , (Var "-", Fun NumT (Fun 
-    NumT NumT))
-    , (Var "*", Fun NumT (Fun 
-    NumT NumT))
-    , (Var "/", Fun NumT (Fun 
-    NumT NumT))]
-
 generateEqns :: Context -> Ast -> String -> [String] -> ([Eqn], [String])
 generateEqns ctx (Val _) varNamn rest = ([(TVar varNamn, NumT)], rest) 
-generateEqns ctx (Var x) varNamn rest = ([(TVar varNamn, )])
+generateEqns ctx (Var x) varNamn rest = 
+    case lookup (Var x) ctx of
+        Just t -> ([(TVar varNamn, t)], rest)
+        Nothing -> error ("Udefinert: " ++ x)
+generateEqns ctx (Add e1 e2) varNamn (t1 : t2 : restVars) = 
+    let (eqs1, rest1) = 
+            generateEqns ctx e1 t1 restVars 
+        (eqs2, rest2) =
+            generateEqns ctx e2 t2 rest1 
+        krav = [(TVar varNamn, NumT), (TVar t1, NumT), (TVar t2, NumT)]
+    in (krav ++ eqs1 ++ eqs2, rest2)
+generateEqns ctx (Sub e1 e2) varNamn (t1 : t2 : restVars) = 
+    let (eqs1, rest1) = 
+            generateEqns ctx e1 t1 restVars 
+        (eqs2, rest2) =
+            generateEqns ctx e2 t2 rest1 
+        krav = [(TVar varNamn, NumT), (TVar t1, NumT), (TVar t2, NumT)]
+    in (krav ++ eqs1 ++ eqs2, rest2)
+generateEqns ctx (Mult e1 e2) varNamn (t1 : t2 : restVars) = 
+    let (eqs1, rest1) = 
+            generateEqns ctx e1 t1 restVars 
+        (eqs2, rest2) =
+            generateEqns ctx e2 t2 rest1 
+        krav = [(TVar varNamn, NumT), (TVar t1, NumT), (TVar t2, NumT)]
+    in (krav ++ eqs1 ++ eqs2, rest2)
+generateEqns ctx (Div e1 e2) varNamn (t1 : t2 : restVars) = 
+    let (eqs1, rest1) = 
+            generateEqns ctx e1 t1 restVars 
+        (eqs2, rest2) =
+            generateEqns ctx e2 t2 rest1 
+        krav = [(TVar varNamn, NumT), (TVar t1, NumT), (TVar t2, NumT)]
+    in (krav ++ eqs1 ++ eqs2, rest2)
+generateEqns ctx (Lambda x body) varNamn (tx : tbody : restVars) = 
+    let nyCtx = (Var x, TVar tx) : ctx
+        (eqsBody, rest1) =
+            generateEqns nyCtx body tbody restVars
+        krav = [(TVar varNamn, Fun (TVar tx) (TVar tbody))]
+    in (krav ++ eqsBody, rest1)
+generateEqns ctx (App e1 e2) varNamn (t1 : t2 : restVars) =
+    let (eqs1, rest1) = 
+            generateEqns ctx e1 t1 restVars
+        (eqs2, rest2) =
+            generateEqns ctx e2 t2 rest1
+        krav = [(TVar t1, Fun (TVar t2) (TVar varNamn))]
+    in (krav ++ eqs1 ++ eqs2, rest2)
+
+
