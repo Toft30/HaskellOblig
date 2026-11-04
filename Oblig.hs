@@ -18,12 +18,12 @@ data Ast --her definere ej den rekursive datatypen Ast
 
 tokenise :: String -> [String] 
 tokenise [] = [] 
+tokenise ('-':'>':xs) = "->" : tokenise xs
 tokenise (x:xs)
     |isSpace x = tokenise xs
     |isDigit x = let (num, rest) = span isDigit (x:xs) in num : tokenise rest
     |x == '|' = "|" : tokenise xs
     |x == '+' = "+" : tokenise xs
-    |x == '-' && head xs == '>' = "->" : tokenise (tail xs)
     |x == '-' = "-" : tokenise xs
     |isLower x = let (var, rest) = span isLower (x:xs) in var : tokenise rest
     |otherwise = [x] : tokenise xs
@@ -170,4 +170,12 @@ generateEqns ctx (App e1 e2) varNamn (t1 : t2 : restVars) =
         krav = [(TVar t1, Fun (TVar t2) (TVar varNamn))]
     in (krav ++ eqs1 ++ eqs2, rest2)
 
+typeOf :: String -> Type 
+typeOf s 
+    | s == "" = error "Tomt uttrykk"
+    | otherwise = w where
+        ast = parse s
+        (eqns,_) = generateEqns [] ast "t0" typeVars
+        w = unify eqns (TVar "t0")    
+        
 
