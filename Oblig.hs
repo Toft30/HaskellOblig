@@ -19,8 +19,9 @@ data Ast --her definere ej den rekursive datatypen Ast
         | Lambda String Ast
         deriving (Show, Eq) --gjer sann vi faktisk kan skrive ut, show gjer sann vi kan skrive ut, Eq gjer sann vi kan sjekke om to Ast e like
 
-tokenise :: String -> [String] 
-tokenise [] = [] 
+--deler strengen i tokens ("->" må sjekkast før "-")
+tokenise :: String -> [String]
+tokenise [] = []
 tokenise ('-':'>':xs) = "->" : tokenise xs
 tokenise (x:xs)
     |isSpace x = tokenise xs
@@ -36,11 +37,13 @@ fyrsteElement :: [String] -> String -> Bool
 fyrsteElement [] _ = False
 fyrsteElement (x:xs) y = x == y
 
+--parse: tokeniserer og parsar. Alle tokens må vere brukt opp, elles er input feil
 parse :: String -> Ast
 parse s = case parseExpr (tokenise s) of
     (tree, []) -> tree
     (_, rest) -> error "ka i alle dage, uventa slutt på input"
 
+--Expr ::= Expr1 + Expr | Expr1 - Expr | Expr1 (gir (tre, resten av tokens))
 parseExpr :: [String] -> (Ast, [String])
 parseExpr tokens | fyrsteElement rest "+" = (Add tree tree2, rest2)
                  | fyrsteElement rest "-" = (Sub tree tree2, rest2)
@@ -49,6 +52,7 @@ parseExpr tokens | fyrsteElement rest "+" = (Add tree tree2, rest2)
         (tree, rest) = parseExpr1 tokens
         (tree2, rest2) = parseExpr (tail rest)
 
+--Expr1 ::= Value * Expr1 | Value / Expr1 | Value (bind sterkare enn + og -)
 parseExpr1 :: [String] -> (Ast, [String])
 parseExpr1 tokens | fyrsteElement rest "*" = (Mult tree tree2, rest2)
                   | fyrsteElement rest "/" = (Div tree tree2, rest2)
@@ -57,8 +61,9 @@ parseExpr1 tokens | fyrsteElement rest "*" = (Mult tree tree2, rest2)
         (tree, rest) = parseValue tokens
         (tree2, rest2) = parseExpr1 (tail rest)
 
+--Value: lambda "| x -> Expr", applikasjon "[ Value Value ]", parentes, tall eller variabel
 parseValue :: [String] -> (Ast, [String])
-parseValue ("|" : var : "->" : rest) = 
+parseValue ("|" : var : "->" : rest) =
     let (bodyTree, restBody) = parseExpr rest
     in (Lambda var bodyTree, restBody)
 parseValue ("[" : rest) = 
@@ -103,6 +108,7 @@ occursIn _ NumT = False
 occursIn name (TVar other) = name == other
 occursIn name (Fun a b) = occursIn name a || occursIn name b
 
+--ei likning seier at to typeuttrykk må vere like
 type Eqn = (Type, Type)
 
 --Byt ut typevariabelen med dette namnet med ein ny type, overalt i typeuttrykket
@@ -111,27 +117,34 @@ substitute _ _ NumT = NumT
 substitute name new (TVar other) = if name == other then new else (TVar other) 
 substitute name new (Fun a b) = Fun (substitute name new a) (substitute name new b)
 
+--tek likningane ein og ein; res er typen vi vil ha svaret på
 unify :: [Eqn] -> Type -> Type
-unify [] res = res
+unify [] res = res --ingen likningar att, res har fått alle bytta
 unify ((a, b) : eqns) res
     | a == b = unify eqns res
+--variabel mot type: occurs-check, ellers bytt x med t i resten og i res
 unify ((TVar x, t) : eqns) res
     | occursIn x t = error "Occurs check feil: Uendelig type"
     |otherwise = unify (map (\(t1, t2) -> (substitute x t t1, substitute x t t2)) eqns) (substitute x t res)
+--snur paret; Fun mot Fun gir to nye likningar (inndata og resultat)
 unify ((t, TVar x) : eqns) res = unify ((TVar x, t) : eqns) res
 unify ((Fun a1 b1, Fun a2 b2) : eqns) res = unify ((a1, a2) : (b1, b2) : eqns) res
+--alt anna, t.d. NumT mot ein funksjonstype, kan ikkje unifiserast
 unify _ _ = error "Uforenlige typer: Kan ikke unifsere ulike typekonstruktører"
 
 --del 3
 type Context = [(Ast, Type)]
 
+--lagar likningar for typen til uttrykket (varNamn); ctx = typar frå lambdaar, lista = ubrukte typevariablar
 generateEqns :: Context -> Ast -> String -> [String] -> ([Eqn], [String])
 generateEqns ctx (Val _) varNamn rest = ([(TVar varNamn, NumT)], rest) 
-generateEqns ctx (Var x) varNamn rest = 
+--variabel: finn typen i konteksten, finst ho ikkje er det ein fri variabel (feil)
+generateEqns ctx (Var x) varNamn rest =
     case lookup (Var x) ctx of
         Just t -> ([(TVar varNamn, t)], rest)
         Nothing -> error ("Udefinert: " ++ x)
-generateEqns ctx (Add e1 e2) varNamn (t1 : t2 : restVars) = 
+--Add, Sub, Mult, Div: operandar og resultat er NumT
+generateEqns ctx (Add e1 e2) varNamn (t1 : t2 : restVars) =
     let (eqs1, rest1) = 
             generateEqns ctx e1 t1 restVars 
         (eqs2, rest2) =
@@ -159,12 +172,14 @@ generateEqns ctx (Div e1 e2) varNamn (t1 : t2 : restVars) =
             generateEqns ctx e2 t2 rest1 
         krav = [(TVar varNamn, NumT), (TVar t1, NumT), (TVar t2, NumT)]
     in (krav ++ eqs1 ++ eqs2, rest2)
-generateEqns ctx (Lambda x body) varNamn (tx : tbody : restVars) = 
+--lambda: varNamn = tx -> tbody, x blir lagt først i konteksten
+generateEqns ctx (Lambda x body) varNamn (tx : tbody : restVars) =
     let nyCtx = (Var x, TVar tx) : ctx
         (eqsBody, rest1) =
             generateEqns nyCtx body tbody restVars
         krav = [(TVar varNamn, Fun (TVar tx) (TVar tbody))]
     in (krav ++ eqsBody, rest1)
+--applikasjon: e1 er ein funksjon (t1), e2 er argumentet (t2), og t1 = t2 -> varNamn
 generateEqns ctx (App e1 e2) varNamn (t1 : t2 : restVars) =
     let (eqs1, rest1) = 
             generateEqns ctx e1 t1 restVars
@@ -173,7 +188,8 @@ generateEqns ctx (App e1 e2) varNamn (t1 : t2 : restVars) =
         krav = [(TVar t1, Fun (TVar t2) (TVar varNamn))]
     in (krav ++ eqs1 ++ eqs2, rest2)
 
-typeOf :: String -> Type 
+--typeOf: parse, lag likningar med t0 som uttrykket sin type, og unifiser med t0 som resultat
+typeOf :: String -> Type
 typeOf s 
     | s == "" = error "Tomt uttrykk"
     | otherwise = w where
@@ -185,6 +201,7 @@ typeOf s
 main :: IO ()
 main = loop
 
+--skriv uttrykk og type; try fangar error frå typeOf
 skrivType :: String -> IO ()
 skrivType uttrykk = do
     resultat <- try (evaluate (show (typeOf uttrykk))) :: IO (Either SomeException String)
@@ -192,6 +209,7 @@ skrivType uttrykk = do
         Left feil -> putStrLn (show feil)
         Right typ -> putStrLn ("Uttrykk: " ++ uttrykk ++ " " ++ typ)
 
+--loop les ei kommando om gongen: t uttrykk, f filnamn eller q. Alle utanom q kallar loop igjen
 loop :: IO ()
 loop = do
     putStr "> "
