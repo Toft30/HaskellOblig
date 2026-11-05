@@ -1,6 +1,9 @@
 --INF Obligatorisk oppgåve, H-2026
 --Namn: Simon Toft og William Waly
 
+import System.IO
+import Control.Exception
+
 import Data.Char (isSpace, isDigit, isLower, isAlpha)
 import Control.Applicative (Alternative(..))
 
@@ -178,4 +181,33 @@ typeOf s
         (eqns,_) = generateEqns [] ast "t0" typeVars
         w = unify eqns (TVar "t0")    
         
+--del 4
+main :: IO ()
+main = loop
 
+skrivType :: String -> IO ()
+skrivType uttrykk = do
+    resultat <- try (evaluate (show (typeOf uttrykk))) :: IO (Either SomeException String)
+    case resultat of
+        Left feil -> putStrLn (show feil)
+        Right typ -> putStrLn ("Uttrykk: " ++ uttrykk ++ " " ++ typ)
+
+loop :: IO ()
+loop = do
+    putStr "> "
+    hFlush stdout
+    linje <- getLine
+    case linje of
+        ('t' : ' ' : uttrykk) -> do
+            skrivType uttrykk
+            loop
+        ('f' : ' ' : filnavn) -> do
+            lesing <- try (readFile filnavn) :: IO (Either SomeException String)
+            case lesing of
+                Left feil -> putStrLn (show feil)
+                Right innhold -> mapM_ skrivType (lines innhold)
+            loop
+        "q" -> return ()
+        _ -> do
+            putStrLn ("Ukjent kommando: " ++ linje) 
+            loop
