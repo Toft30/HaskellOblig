@@ -99,7 +99,7 @@ data Type
 instance Show Type where
     show NumT = "NumT"
     show (TVar name) = name
-    show (Fun a@(Fun _ _) b) = "(" ++ show a ++ ")->" ++ show b
+    show (Fun (Fun x y) b) = "(" ++ show (Fun x y) ++ ")->" ++ show b
     show (Fun a b) = show a ++ "->" ++ show b
 
 --2.3 Forekjem typevariabelen med dette namnet i typeuttrykket?
